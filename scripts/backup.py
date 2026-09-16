@@ -55,24 +55,35 @@ def backup():
         config.write_text('uri: ' + json.dumps(mongo['uri']) + '\n')
         config.chmod(0o600)
         # Do not use --oplog on Atlas Free. This is a live dump, not a global snapshot.
+        print('BACKUP_STAGE: MongoDB', file=sys.stderr)
+        tool_name = 'nrapp-mongodump-' + stamp.lower()
         with (work / 'mongo-tools.log').open('wb') as log:
-            run(['docker', 'run', '--rm', '--network', 'host', '--memory', '256m',
-                 '--cpus', '0.75', '-v', str(work) + ':/backup', settings['mongo_image'],
-                 'mongodump', '--config=/backup/mongo-config.yml', '--db=' + mongo['db'],
-                 '--archive=/backup/mongo.archive.gz', '--gzip', '--numParallelCollections=1'],
-                stdout=log, stderr=log)
+            try:
+                run(['docker', 'run', '--rm', '--name', tool_name,
+                     '--user', str(os.getuid()) + ':' + str(os.getgid()),
+                     '--network', 'host', '--memory', '256m', '--cpus', '0.75',
+                     '-v', str(work) + ':/backup', settings['mongo_image'],
+                     'mongodump', '--config=/backup/mongo-config.yml', '--db=' + mongo['db'],
+                     '--archive=/backup/mongo.archive.gz', '--gzip', '--numParallelCollections=1'],
+                    stdout=log, stderr=log)
+            finally:
+                run(['docker', 'rm', '-f', tool_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         config.unlink()
         run(['gzip', '-t', str(work / 'mongo.archive.gz')])
         redis = container('redis')
+        print('BACKUP_STAGE: Redis', file=sys.stderr)
         remote_rdb = '/tmp/nrapp-backup-' + stamp + '.rdb'
         try:
             run(['docker', 'exec', redis, 'redis-cli', '--rdb', remote_rdb],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            run(['docker', 'exec', redis, 'redis-check-rdb', remote_rdb],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             run(['docker', 'cp', redis + ':' + remote_rdb, str(work / 'redis.rdb')],
                 stdout=subprocess.DEVNULL)
         finally:
             run(['docker', 'exec', redis, 'rm', '-f', remote_rdb])
         rabbit = container('rabbitmq')
+        print('BACKUP_STAGE: RabbitMQ', file=sys.stderr)
         definitions = '/tmp/nrapp-backup-' + stamp + '.json'
         try:
             run(['docker', 'exec', rabbit, 'rabbitmqctl', 'export_definitions', definitions],
@@ -112,6 +123,7 @@ def backup():
             for path in payloads:
                 archive.add(path, arcname=path.name, recursive=False)
         partial = target.with_suffix('.partial')
+        print('BACKUP_STAGE: Encryption', file=sys.stderr)
         try:
             run([str(ROOT / 'bin/age'), '-r', settings['age_recipient'], '-o', str(partial), str(tarpath)])
             partial.chmod(0o600)
