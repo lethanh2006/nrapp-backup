@@ -35,6 +35,10 @@ hay toàn bộ ổ VPS. Khôi phục database không tự khôi phục các tài
 4. GitHub artifact giữ **30 ngày**, hết hạn sẽ bị xóa. Đây không phải kho lưu
    trữ vĩnh viễn; tải bản quan trọng về máy hoặc bổ sung object storage.
 
+Repo hiện public: GitHub có thể tắt schedule sau 60 ngày không có hoạt động repo.
+Timer VPS vẫn chạy, nhưng cần kiểm tra và bật lại workflow offsite khi bị tắt.
+Xem [quy định schedule của GitHub](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows).
+
 Mục tiêu ban đầu là RPO khoảng 24 giờ khi cả hai lịch chạy thành công.
 RTO cần đo trong diễn tập phục hồi hệ thống, không suy ra từ việc dump thành công.
 
@@ -130,7 +134,7 @@ docker exec nrapp-restore-drill mongorestore \
   --archive=/tmp/mongo.archive.gz --gzip --stopOnError
 docker exec nrapp-restore-drill mongosh --quiet --eval \
   'const d=db.getSiblingDB("nrapp"); printjson(d.getCollectionNames().map(n=>({collection:n,count:d[n].countDocuments({})})))'
-docker rm -f nrapp-restore-drill
+docker rm -fv nrapp-restore-drill
 ```
 
 Database thực tế xem `manifest.json`; thay `nrapp` nếu khác. Kiểm tra số collection,
@@ -144,6 +148,25 @@ không dùng `--drop` trên production nếu chưa xác định việc xóa dữ
 RabbitMQ definitions import chỉ khôi phục cấu hình, không hồi phục message đã mất.
 PostgreSQL dùng `pg_restore --exit-on-error` vào database thử trước nếu manifest
 có `postgres: true`. Khôi phục `.env` cần quyền chặt chẽ và đối chiếu credential.
+
+## Kết quả thực thi ngày 16/09/2026
+
+- [CI/CD thành công](https://github.com/lethanh2006/nrapp-backup/actions/runs/35077039220):
+  kiểm tra code, deploy và cập nhật timer trên VPS.
+- Systemd service đã chạy thật, kết thúc `status=0/SUCCESS`; lần này tạo file
+  `nrapp-20260916T090241Z.tar.age`.
+- [Backup ngoài VPS thành công](https://github.com/lethanh2006/nrapp-backup/actions/runs/35077097126):
+  artifact `nrapp-encrypted-35077097126`, khoảng 31 KB, hạn giữ đến 16/10/2026.
+- Đã tải bản từ GitHub, kiểm tra checksum bên ngoài, giải mã bằng khóa trên máy
+  cá nhân và kiểm tra mọi file theo `SHA256SUMS` bên trong.
+- Đã restore MongoDB vào container riêng trên VPS, không mở port, dùng network
+  riêng bị ngắt kết nối ngoài: **19 collections, 4 documents, 53 indexes**;
+  `mongorestore` báo **0 documents failed**. Đây là dữ liệu tại thời điểm kiểm tra,
+  không phải yêu cầu số lượng cố định của lần backup sau.
+- Redis snapshot đã qua `redis-check-rdb`; RabbitMQ definitions đọc được dưới
+  dạng JSON. Chưa diễn tập phục hồi Redis/RabbitMQ/Payment hay toàn bộ ứng dụng.
+- API `/health` vẫn trả HTTP 200 sau diễn tập. Container thử và dữ liệu thử được
+  dọn; không restore vào Atlas production.
 
 ## Giới hạn nhất quán MongoDB
 
