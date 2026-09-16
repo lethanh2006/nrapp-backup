@@ -8,7 +8,7 @@ case "${SSH_ORIGINAL_COMMAND:-}" in
     ;;
   deploy\ *)
     read -r action revision extra <<<"$SSH_ORIGINAL_COMMAND"
-    [[ "$revision" =~ ^[0-9a-f]{40}$ && -z "${extra:-}" ]]
+    [[ "$action" == deploy && "$revision" =~ ^[0-9a-f]{40}$ && -z "${extra:-}" ]]
     exec 9>"$root/deploy.lock"
     flock -w 120 9
     incoming=$(mktemp "$root/incoming.XXXXXX.tar.gz")
