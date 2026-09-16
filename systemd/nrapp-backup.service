@@ -1,0 +1,11 @@
+[Unit]
+Description=Encrypted NRApp database backup
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/nrapp/backup/current/scripts/backup.py run
+UMask=0077
+TimeoutStartSec=45min
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

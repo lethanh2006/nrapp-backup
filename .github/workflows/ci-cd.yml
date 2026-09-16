@@ -1,0 +1,64 @@
+name: CI and deploy backup
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: backup-deploy-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Validate Python and shell
+        run: |
+          python3 -m py_compile scripts/backup.py
+          bash -n scripts/receiver.sh
+          shellcheck scripts/receiver.sh
+      - name: Validate systemd units
+        run: systemd-analyze --user verify systemd/nrapp-backup.service systemd/nrapp-backup.timer
+  deploy:
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Configure SSH
+        env:
+          BACKUP_SSH_KEY: ${{ secrets.BACKUP_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$BACKUP_SSH_KEY"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$BACKUP_SSH_KEY" > "$HOME/.ssh/backup"
+          chmod 600 "$HOME/.ssh/backup"
+          install -m 600 deploy/known_hosts "$HOME/.ssh/known_hosts"
+      - name: Deploy exact revision
+        env:
+          REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          current=$(git ls-remote https://github.com/lethanh2006/nrapp-backup.git refs/heads/main | awk '{print $1}')
+          if [[ "$current" != "$REVISION" ]]; then
+            echo 'Skip stale deployment'
+            exit 0
+          fi
+          printf '%s\n' "$REVISION" > REVISION
+          tar -czf "$RUNNER_TEMP/deploy.tar.gz" scripts systemd REVISION
+          ssh -T -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=20 -o ServerAliveInterval=30 -i "$HOME/.ssh/backup" \
+            deploy@103.116.52.35 "deploy $REVISION" < "$RUNNER_TEMP/deploy.tar.gz"
+      - name: Remove key
+        if: always()
+        run: rm -f "$HOME/.ssh/backup"

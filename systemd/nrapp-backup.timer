@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily NRApp backup at 02:30 Vietnam time
+
+[Timer]
+OnCalendar=*-*-* 19:30:00 UTC
+RandomizedDelaySec=300
+Persistent=true
+Unit=nrapp-backup.service
+
+[Install]
+WantedBy=timers.target

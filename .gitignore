@@ -1,0 +1,10 @@
+*.age
+*.key
+*.dump
+*.rdb
+*.archive.gz
+*.tar.gz
+*.env
+__pycache__/
+backups/
+recovery/
