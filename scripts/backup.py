@@ -67,7 +67,8 @@ def backup():
                      '--archive=/backup/mongo.archive.gz', '--gzip', '--numParallelCollections=1'],
                     stdout=log, stderr=log)
             finally:
-                run(['docker', 'rm', '-f', tool_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(['docker', 'rm', '-f', tool_name], check=False, timeout=30,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         config.unlink()
         run(['gzip', '-t', str(work / 'mongo.archive.gz')])
         redis = container('redis')
