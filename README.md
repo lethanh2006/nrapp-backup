@@ -82,6 +82,9 @@ Dữ liệu tạm được dọn sau khi kết thúc; payload chỉ được cô
 
 ## Chạy và kiểm tra
 
+Xem hướng dẫn đầy đủ về `.yml`, luồng hoạt động và lệnh kiểm tra VPS tại
+[VPS_BACKUP_OPERATIONS.md](VPS_BACKUP_OPERATIONS.md).
+
 Kết nối bằng khóa quản trị hiện có:
 
 ```bash
