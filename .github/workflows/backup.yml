@@ -58,8 +58,8 @@ jobs:
           install -m 600 "$RUNNER_TEMP/encrypted-backup/$archive.sha256" "$backup_dir/$archive.sha256"
           printf '%s\n' "$archive" > "$backup_dir/LATEST"
           chmod 600 "$backup_dir/LATEST"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.name 'lethanh2006'
+          git config user.email 'thanhld2006.ptit@gmail.com'
           git add -f "$backup_dir/$archive" "$backup_dir/$archive.sha256" "$backup_dir/LATEST"
           if git diff --cached --quiet; then
             echo 'No new encrypted backup to commit'
