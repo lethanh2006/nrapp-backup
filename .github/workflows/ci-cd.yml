@@ -2,6 +2,8 @@ name: CI and deploy backup
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'backups/**'
   pull_request:
     branches: [main]
   workflow_dispatch:

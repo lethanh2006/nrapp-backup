@@ -4,8 +4,8 @@ Repository: https://github.com/lethanh2006/nrapp-backup
 
 Hệ thống triển khai trên VPS `103.116.52.35`, user `deploy`, backend tại
 `/opt/nrapp/backend`. Mã backup tại `/opt/nrapp/backup/current`; dữ liệu mã hóa
-tại `/opt/nrapp-backups`. Repo chứa mã và tài liệu; dữ liệu backup được lưu
-dưới dạng **GitHub Actions artifact mã hóa**, không commit vào Git.
+tại `/opt/nrapp-backups`. Repo chứa mã, tài liệu và bản sao các archive đã mã hóa;
+GitHub Actions cũng lưu chúng dưới dạng artifact.
 
 ## Thành phần được sao lưu
 
@@ -28,12 +28,15 @@ hay toàn bộ ổ VPS. Khôi phục database không tự khôi phục các tài
    được bật linger để timer hoạt động khi không có phiên SSH.
 2. GitHub Actions chạy lúc **03:15 giờ Việt Nam** để lấy bản mã hóa mới nhất.
    Nếu bản gần nhất đã quá 23 giờ, lệnh export tạo bản mới trước khi truyền.
-   GitHub có thể chạy schedule trễ; xem timestamp thực tế trong Actions.
+   Sau khi kiểm tra checksum, workflow upload artifact và commit archive mã hóa,
+   checksum cùng `backups/LATEST` vào Git. GitHub có thể chạy schedule trễ; xem
+   timestamp thực tế trong Actions.
 3. VPS giữ bản thuộc hệ thống này trong 14 ngày và luôn giữ ít nhất 7 bản.
    Chỉ dọn sau khi tạo thành công một bản mới. Backup cũ chưa có bản ngoài VPS
    vẫn có thể hết hạn: cần theo dõi workflow offsite nếu GitHub lỗi nhiều ngày.
-4. GitHub artifact giữ **30 ngày**, hết hạn sẽ bị xóa. Đây không phải kho lưu
-   trữ vĩnh viễn; tải bản quan trọng về máy hoặc bổ sung object storage.
+4. GitHub artifact giữ **30 ngày**, còn bản đã commit nằm trong lịch sử Git cho
+   đến khi được dọn riêng. Đây vẫn không phải object storage chuyên dụng; nên
+   bổ sung thêm một nơi lưu trữ độc lập cho bản quan trọng.
 
 Repo hiện public: GitHub có thể tắt schedule sau 60 ngày không có hoạt động repo.
 Timer VPS vẫn chạy, nhưng cần kiểm tra và bật lại workflow offsite khi bị tắt.
@@ -45,7 +48,8 @@ RTO cần đo trong diễn tập phục hồi hệ thống, không suy ra từ v
 ## CI/CD
 
 Push vào `main` chạy kiểm tra Python, Bash, ShellCheck và systemd units. Chỉ khi
-CI thành công mới triển khai đúng commit đó lên VPS. Pull request chỉ chạy CI.
+CI thành công mới triển khai đúng commit mã lên VPS. Các commit chỉ thay đổi
+`backups/**` được bỏ qua CD; pull request chỉ chạy CI.
 Receiver giới hạn archive 1 MiB, kiểm tra đường dẫn, loại file và SHA; chuyển
 symlink `current` sau khi kiểm tra. Các lần deploy và backup dùng lock để tránh
 thay mã giữa lúc backup chạy. CD cập nhật cả service/timer và reload systemd.

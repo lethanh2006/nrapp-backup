@@ -4,7 +4,7 @@ on:
     - cron: '15 20 * * *' # 03:15 Asia/Ho_Chi_Minh
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: backup-export
   cancel-in-progress: false
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          persist-credentials: false
+          persist-credentials: true
       - name: Configure SSH
         env:
           BACKUP_SSH_KEY: ${{ secrets.BACKUP_SSH_KEY }}
@@ -45,6 +45,37 @@ jobs:
           retention-days: 30
           compression-level: 0
           if-no-files-found: error
+      - name: Commit encrypted backup to repository
+        run: |
+          set -euo pipefail
+          backup_dir=backups
+          archive=$(find "$RUNNER_TEMP/encrypted-backup" -maxdepth 1 -type f -name 'nrapp-*.tar.age' -printf '%f\n')
+          test "$(find "$RUNNER_TEMP/encrypted-backup" -maxdepth 1 -type f -name 'nrapp-*.tar.age' | wc -l)" -eq 1
+          test -n "$archive"
+          test -f "$RUNNER_TEMP/encrypted-backup/$archive.sha256"
+          mkdir -p "$backup_dir"
+          install -m 600 "$RUNNER_TEMP/encrypted-backup/$archive" "$backup_dir/$archive"
+          install -m 600 "$RUNNER_TEMP/encrypted-backup/$archive.sha256" "$backup_dir/$archive.sha256"
+          printf '%s\n' "$archive" > "$backup_dir/LATEST"
+          chmod 600 "$backup_dir/LATEST"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f "$backup_dir/$archive" "$backup_dir/$archive.sha256" "$backup_dir/LATEST"
+          if git diff --cached --quiet; then
+            echo 'No new encrypted backup to commit'
+            exit 0
+          fi
+          git commit -m "backup: $archive"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            if [[ "$attempt" == 3 ]]; then
+              exit 1
+            fi
+            git fetch origin main
+            git rebase origin/main
+          done
       - name: Remove temporary key and transport
         if: always()
         run: rm -f "$HOME/.ssh/backup" "$RUNNER_TEMP/backup-export.tar"

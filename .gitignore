@@ -6,5 +6,8 @@
 *.tar.gz
 *.env
 __pycache__/
-backups/
+backups/*
+!backups/LATEST
+!backups/*.age
+!backups/*.age.sha256
 recovery/
